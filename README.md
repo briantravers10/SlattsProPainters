@@ -106,3 +106,21 @@ clears the surface.
 
 Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · Recharts ·
 lucide-react
+
+## Deployment
+
+The app is a standard Next.js build with **no environment variables and no API
+keys** — nothing to configure before a deploy.
+
+```bash
+npx vercel          # preview deployment
+npx vercel --prod   # production deployment
+```
+
+When deploying from a Vercel project linked to this repository, note that
+`claude/painting-lead-generation-demo-uayndb` is currently the repository's
+only branch, so Vercel treats it as the production branch.
+
+Before sharing a deployed URL with anyone outside the team, check
+**Settings → Deployment Protection**. If Vercel Authentication is enabled the
+link will present a login wall rather than the demo.
