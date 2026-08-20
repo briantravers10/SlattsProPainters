@@ -2,9 +2,8 @@ import { createRng, type Rng } from "@/lib/rng";
 import { NEIGHBORHOODS, type NeighborhoodDef } from "@/lib/geo/nyc";
 import { recommendChannels, scoreProperty } from "@/lib/scoring";
 import type { PropertyScoreInput } from "@/lib/scoring";
-import {
-  defaultPropertyRecordPermissions,
-} from "@/lib/compliance";
+import { defaultPropertyRecordPermissions } from "@/lib/compliance";
+import { screenLead } from "@/lib/compliance/screening";
 import type {
   ActivityEvent,
   Borough,
@@ -294,6 +293,8 @@ function buildTimeline(rng: Rng, lead: Omit<PropertyLead, "timeline">): Activity
 export interface PropertyGenerationOptions {
   /** Restrict discovery to these boroughs. */
   boroughs?: Borough[];
+  /** Restrict discovery to these ZIP codes. */
+  zips?: string[];
   /** Only produce leads carrying at least one of these triggers. */
   triggerTypes?: TriggerType[];
   /** Only keep leads scoring at or above this threshold. */
@@ -315,9 +316,12 @@ export function generatePropertyLeads(
   const leads: PropertyLead[] = [];
   const thisYear = demoToday().getFullYear();
 
-  const pool = options.boroughs?.length
+  let pool = options.boroughs?.length
     ? NEIGHBORHOODS.filter((n) => options.boroughs!.includes(n.borough))
     : NEIGHBORHOODS;
+  if (options.zips?.length) {
+    pool = pool.filter((n) => n.zips.some((z) => options.zips!.includes(z)));
+  }
   const neighborhoodPool = pool.length ? pool : NEIGHBORHOODS;
 
   const planPool = options.triggerTypes?.length
@@ -469,6 +473,11 @@ export function generatePropertyLeads(
       address: makeAddress(rng, propertyType === "Condo" || propertyType === "Co-op"),
       borough: nb.borough,
       neighborhood: nb.name,
+      zip: rng.pick(
+        options.zips?.length
+          ? (nb.zips.filter((z) => options.zips!.includes(z)) ?? nb.zips)
+          : nb.zips,
+      ),
       lat: nb.lat + rng.float(-0.011, 0.011),
       lng: nb.lng + rng.float(-0.013, 0.013),
       propertyType,
@@ -496,6 +505,11 @@ export function generatePropertyLeads(
       dateDiscovered,
       followUpDate,
       permissions,
+      screening: screenLead(
+        `${idPrefix}-${1000 + idOffset + i}`,
+        false,
+        permissions.source === "Lead Form" || permissions.source === "Referral",
+      ),
       sourceIntegration,
       notes: rng.pick(NOTE_SNIPPETS),
     };

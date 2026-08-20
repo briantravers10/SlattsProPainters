@@ -1,8 +1,5 @@
-import type {
-  ContactPermissions,
-  Lead,
-  OutreachChannel,
-} from "@/lib/types";
+import type { ContactPermissions, Lead, OutreachChannel } from "@/lib/types";
+import { REGISTRY_BY_ID, SCREENED_CHANNEL_FOR, type ScreenedChannel } from "./registries";
 
 /**
  * Compliance layer.
@@ -13,6 +10,10 @@ import type {
  *     contact them. Permission is a separate, explicit field.
  *  2. Consumer (residential) outreach and B2B outreach are gated by
  *     different default rules.
+ *  3. Suppression screening FAILS CLOSED. A registry that has not been checked
+ *     blocks the channel exactly as a positive hit does — "we didn't look" is
+ *     never treated as "it's fine". Screening therefore outranks permission:
+ *     consent does not survive a do-not-call match.
  *
  * This is a configurable safeguard, not legal advice. The rules below must be
  * reviewed against applicable federal, New York State and New York City
@@ -157,7 +158,58 @@ export function evaluateChannels(lead: Lead): ChannelGate[] {
   add("Property Manager Partnership", "allowed", "B2B relationship channel.");
   add("Contractor Partnership", "allowed", "B2B relationship channel.");
 
-  return gates;
+  // Suppression screening is applied last and can only ever downgrade a gate.
+  // A channel that permission would allow is still blocked by a registry hit
+  // or by never having been screened.
+  return gates.map((gate) => {
+    const verdict = registryVerdict(lead, gate.channel);
+    if (!verdict) return gate;
+    if (gate.status === "blocked") return gate; // already blocked for another reason
+    return {
+      channel: gate.channel,
+      status: verdict.status,
+      reason: verdict.reason,
+      requirement: verdict.requirement,
+    };
+  });
+}
+
+/**
+ * Registry verdict for one channel.
+ *
+ * Returns null when no suppression list governs the channel (advertising and
+ * partnership channels reach no individual, so nothing to screen).
+ */
+function registryVerdict(
+  lead: Lead,
+  channel: OutreachChannel,
+): { status: GateStatus; reason: string; requirement?: string } | null {
+  const screened: ScreenedChannel | undefined = SCREENED_CHANNEL_FOR[channel];
+  if (!screened) return null;
+
+  const relevant = lead.screening.checks.filter((c) => c.channel === screened);
+  if (relevant.length === 0) return null;
+
+  const hit = relevant.find((c) => c.result === "listed");
+  if (hit) {
+    return {
+      status: "blocked",
+      reason: `Suppressed — this lead matched ${hit.name}.`,
+      requirement: `Remove ${channel.toLowerCase()} from the plan for this lead. A match is not something to work around.`,
+    };
+  }
+
+  const unchecked = relevant.filter((c) => c.result === "not-checked");
+  if (unchecked.length > 0) {
+    const names = unchecked.map((c) => REGISTRY_BY_ID[c.registryId].name).join(", ");
+    return {
+      status: "blocked",
+      reason: `Not screened against ${names}. Unscreened is treated as blocked, not as permitted.`,
+      requirement: `Connect and run ${names}, then re-screen this lead.`,
+    };
+  }
+
+  return null;
 }
 
 export function channelStatus(lead: Lead, channel: OutreachChannel): GateStatus {

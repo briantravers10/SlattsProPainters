@@ -1,4 +1,8 @@
+import type { LeadScreening } from "./compliance/registries";
+
 /** Core domain types shared across the application. */
+
+export type { LeadScreening };
 
 export type Borough =
   | "Manhattan"
@@ -197,6 +201,7 @@ export interface PropertyLead {
   address: string;
   borough: Borough;
   neighborhood: string;
+  zip: string;
   lat: number;
   lng: number;
   propertyType: PropertyType;
@@ -223,6 +228,8 @@ export interface PropertyLead {
   dateDiscovered: string;
   followUpDate?: string;
   permissions: ContactPermissions;
+  /** Suppression-list results, refreshed at discovery and before contact. */
+  screening: LeadScreening;
   sourceIntegration: string;
   notes: string;
   timeline: ActivityEvent[];
@@ -278,6 +285,7 @@ export interface BusinessLead {
   group: PartnerGroup;
   borough: Borough;
   neighborhood: string;
+  zip: string;
   lat: number;
   lng: number;
   website: string;
@@ -298,6 +306,7 @@ export interface BusinessLead {
   lastContacted?: string;
   followUpDate?: string;
   permissions: ContactPermissions;
+  screening: LeadScreening;
   sourceIntegration: string;
   notes: string;
   timeline: ActivityEvent[];
@@ -335,6 +344,7 @@ export interface Customer {
   address: string;
   borough: Borough;
   neighborhood: string;
+  zip: string;
   lat: number;
   lng: number;
   jobType: string;

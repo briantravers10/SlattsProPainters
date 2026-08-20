@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  ListChecks,
   Settings as SettingsIcon,
   Cpu,
   ShieldCheck,
@@ -18,6 +19,8 @@ import { useData } from "@/lib/store/DataProvider";
 import { WORKER_AGENTS } from "@/lib/manager";
 import { activePropertyEngine, activePartnershipEngine } from "@/lib/scoring";
 import { COMPLIANCE_DISCLAIMER } from "@/lib/compliance";
+import { REGISTRIES, SCREENING_DISCLAIMER } from "@/lib/compliance/registries";
+import { activeScreeningEngine } from "@/lib/compliance/screening";
 import { APP, DEMO_MODE, INTEGRATIONS_ENABLED } from "@/lib/config";
 import { cn } from "@/lib/utils";
 
@@ -76,6 +79,60 @@ export default function SettingsPage() {
             Enabling any of these in production requires connecting a paid provider and completing a
             compliance review first. Nothing in this demo can be switched on from the interface.
           </p>
+        </div>
+      </Card>
+
+      {/* Suppression registries */}
+      <Card>
+        <CardHeader
+          title="Suppression registries"
+          subtitle="Every lead is screened against these before any channel opens"
+          icon={<ListChecks className="size-4.5" />}
+          action={<Badge tone="brand">{activeScreeningEngine.id}</Badge>}
+        />
+
+        <div className="mx-5 mb-4 flex gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3.5 dark:border-emerald-500/25 dark:bg-emerald-500/5">
+          <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <p className="text-[12.5px] leading-relaxed text-muted">
+            <strong className="font-semibold text-fg">Screening fails closed.</strong> A list that
+            has not been checked blocks its channel exactly as a positive match does. Screening also
+            outranks consent — a do-not-call match blocks the call even where consent is on file.
+          </p>
+        </div>
+
+        <ul className="divide-y divide-border">
+          {REGISTRIES.map((registry) => (
+            <li key={registry.id} className="px-5 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-[14px] font-medium text-fg">{registry.name}</p>
+                    <Badge tone="muted">{registry.channel}</Badge>
+                    {!registry.appliesToBusiness && <Badge tone="muted">consumer only</Badge>}
+                  </div>
+                  <p className="mt-1 text-[13px] leading-relaxed text-muted">
+                    {registry.description}
+                  </p>
+                  <p className="mt-1.5 text-[12px] leading-relaxed text-subtle">
+                    <strong className="font-medium text-muted">Access:</strong> {registry.access}
+                  </p>
+                  <p className="mt-0.5 text-[12px] text-subtle">
+                    <strong className="font-medium text-muted">Refresh:</strong> {registry.cadence}
+                  </p>
+                </div>
+                <Badge
+                  tone={registry.connectionStatus.startsWith("Internal") ? "success" : "warning"}
+                  dot
+                >
+                  {registry.connectionStatus}
+                </Badge>
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        <div className="border-t border-border bg-surface-2/50 px-5 py-3.5">
+          <p className="text-[11.5px] leading-relaxed text-subtle">{SCREENING_DISCLAIMER}</p>
         </div>
       </Card>
 
@@ -206,6 +263,8 @@ export default function SettingsPage() {
           <ul className="space-y-2.5 px-5 pb-5">
             {[
               "Discovering information is never treated as permission to contact.",
+              "Every lead is screened against suppression registries at discovery and again before contact.",
+              "Screening fails closed — an unchecked list blocks the channel exactly as a match does.",
               "Consumer and B2B leads are gated by separate default rule sets.",
               "SMS requires recorded written consent — never inferred.",
               "A do-not-contact flag blocks every direct channel, in every view.",

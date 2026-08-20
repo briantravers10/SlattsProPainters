@@ -76,7 +76,8 @@ export default function PropertyDetailPage({
               </h1>
               <p className="mt-1.5 flex items-center gap-1.5 text-[14px] text-muted">
                 <MapPin className="size-4 text-subtle" />
-                {lead.neighborhood}, {lead.borough}
+                {lead.neighborhood}, {lead.borough}{" "}
+                <span className="font-mono text-[13px] text-subtle">{lead.zip}</span>
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-1.5">
                 <StageBadge stage={lead.stage} />
@@ -135,7 +136,7 @@ export default function PropertyDetailPage({
                   { label: "Owner type", value: lead.ownerType },
                   { label: "Owner (synthetic)", value: lead.ownerLabel },
                   { label: "Est. property value", value: currency(lead.estimatedValue) },
-                  { label: "Borough", value: lead.borough },
+                  { label: "ZIP code", value: lead.zip, hint: lead.neighborhood },
                 ]}
               />
             </div>

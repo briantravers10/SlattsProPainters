@@ -33,6 +33,7 @@ export default function PipelinePage() {
       if (q && !haystack.toLowerCase().includes(q)) return false;
       if (filters.borough !== "all" && l.borough !== filters.borough) return false;
       if (filters.neighborhood !== "all" && l.neighborhood !== filters.neighborhood) return false;
+      if (filters.zips.length > 0 && !filters.zips.includes(l.zip)) return false;
       if (filters.stage !== "all" && l.stage !== filters.stage) return false;
       if (!matchesBand(l.score.score, filters.band)) return false;
       if (filters.extra !== "all") {

@@ -80,15 +80,39 @@ src/
 - **Outreach** — every integration is hard-disabled in `config.ts`. The Outreach
   Agent only queues campaigns for human approval.
 
+## Targeting
+
+Leads can be filtered by borough, neighborhood and **ZIP code** (multi-select),
+and the AI Manager understands ZIPs directly — *"find high-potential properties
+in 11215 and 11238"*.
+
+ZIP is deliberately an **independent** filter rather than a child of
+borough → neighborhood: NYC ZIPs do not nest inside neighborhoods (Park Slope
+spans 11215/11217/11238; 11215 covers parts of several neighborhoods). In
+production the ZIP comes off the property record itself and is never derived
+from the neighborhood table.
+
 ## Compliance model
 
-Two principles are enforced structurally rather than by convention:
+Three principles are enforced structurally rather than by convention:
 
 1. **Discovering a person's information is never treated as permission to
    contact them.** Discovery and consent are separate fields, and every channel
    carries an explicit allow / review / block decision with a stated reason.
 2. **Consumer and B2B outreach are separate systems with separate default
    rules**, not one list with a filter.
+3. **Suppression screening fails closed.** Every lead is screened against the
+   registries governing each channel (`lib/compliance/registries.ts`) at
+   discovery and again before contact. A list that has *not* been checked
+   blocks its channel exactly as a positive match does — "we didn't look" is
+   never treated as "it's fine". Screening also outranks consent: a
+   do-not-call match blocks the call even where consent is on file.
+
+No real registry is connected in this build; results are simulated by
+`lib/compliance/screening.ts`, which implements a swappable engine interface.
+In production each list requires its own registered or subscribed access and
+its own refresh cadence, and screening is a safeguard rather than a guarantee
+of compliance.
 
 These rules are configurable safeguards. They must be reviewed against
 applicable federal, New York State and New York City requirements — and against

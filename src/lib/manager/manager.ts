@@ -4,6 +4,7 @@ import { discoverBusinessLeads } from "@/lib/data/business-leads";
 import type { BusinessLead, Lead, PropertyLead } from "@/lib/types";
 import { currency, daysAgo, isDueWithin } from "@/lib/utils";
 import { complianceSummary, evaluateChannels } from "@/lib/compliance";
+import { REGISTRIES } from "@/lib/compliance/registries";
 import { AGENT_BY_ID, type AgentId } from "./agents";
 import { parseIntent, type ParsedIntent } from "./intents";
 import type { AgentStep, ManagerResponse } from "./types";
@@ -50,6 +51,7 @@ function applyCommonFilters<T extends Lead>(leads: T[], intent: ParsedIntent): T
   if (intent.neighborhoods.length) {
     out = out.filter((l) => intent.neighborhoods.includes(l.neighborhood));
   }
+  if (intent.zips.length) out = out.filter((l) => intent.zips.includes(l.zip));
   if (intent.minScore !== undefined) out = out.filter((l) => l.score.score >= intent.minScore!);
   if (intent.timeframe) {
     const window = intent.timeframe === "today" ? 1 : intent.timeframe === "week" ? 7 : 30;
@@ -87,6 +89,9 @@ export function runManagerCommand(raw: string, db: DemoDatabase): ManagerRespons
 /* ------------------------------------------------------------------ */
 
 function scopeLabel(intent: ParsedIntent) {
+  if (intent.zips.length) {
+    return `ZIP ${intent.zips.join(", ")}`;
+  }
   if (intent.neighborhoods.length) return intent.neighborhoods.join(", ");
   if (intent.boroughs.length === 1) return intent.boroughs[0];
   if (intent.boroughs.length > 1) return intent.boroughs.join(", ");
@@ -116,6 +121,7 @@ function findProperties(id: string, intent: ParsedIntent, db: DemoDatabase): Man
       Math.min(gap, MAX_DISCOVERY),
       {
         boroughs: intent.boroughs.length ? intent.boroughs : undefined,
+        zips: intent.zips.length ? intent.zips : undefined,
         triggerTypes: intent.triggers.length ? intent.triggers : undefined,
         minScore: intent.minScore,
         idOffset: discoveryOffset,
@@ -147,7 +153,12 @@ function findProperties(id: string, intent: ParsedIntent, db: DemoDatabase): Man
       : []),
     step("permit-trigger-research", "Checking timing signals", intent.triggers.length ? `Filtering for: ${intent.triggers.join(", ")}` : "Evaluating sale, permit, listing and turnover triggers", 540),
     step("lead-scoring", "Scoring and ranking", `Ranked ${results.length} matching properties by Painting Opportunity Score`, 460),
-    step("compliance", "Gating outreach channels", blocked > 0 ? `${blocked} of ${capped.length} results have at least one blocked channel` : "All results have at least one cleared channel", 380),
+    step(
+      "compliance",
+      "Screening against suppression registries",
+      screeningLine(capped),
+      520,
+    ),
   ];
 
   const shortfall = intent.limit > results.length;
@@ -169,10 +180,7 @@ function findProperties(id: string, intent: ParsedIntent, db: DemoDatabase): Man
     businesses: [],
     customers: [],
     recommendations: propertyRecommendations(capped),
-    complianceNote:
-      blocked > 0
-        ? `${blocked} of these leads have at least one blocked channel. Discovering a property record is not permission to call, text or email the owner — open any lead to see exactly which channels the Compliance Agent has cleared.`
-        : undefined,
+    complianceNote: `Every result was screened against ${REGISTRIES.length} suppression lists before being shown. Screening fails closed: a list that has not been checked blocks the channel exactly as a positive match does, which is why phone and SMS are unavailable on most property-record leads. ${blocked > 0 ? `${blocked} of these have at least one blocked channel. ` : ""}Discovering a property record is never permission to contact its owner — open any lead to see each channel's verdict and the reason behind it.`,
     suggestions: [
       `Show me the highest-value opportunities in ${intent.boroughs[0] ?? "Brooklyn"}.`,
       "Show me every prospect that needs a follow-up today.",
@@ -243,6 +251,7 @@ function findBusinesses(id: string, intent: ParsedIntent, db: DemoDatabase): Man
       Math.min(gap, MAX_DISCOVERY),
       {
         boroughs: intent.boroughs.length ? intent.boroughs : undefined,
+        zips: intent.zips.length ? intent.zips : undefined,
         categories: intent.categories.length ? intent.categories : undefined,
         idOffset: discoveryOffset,
         discoveredToday: true,
@@ -281,7 +290,12 @@ function findBusinesses(id: string, intent: ParsedIntent, db: DemoDatabase): Man
       : []),
     step(researchAgent, "Sizing the recurring opportunity", `Estimated portfolio size and annual job volume for ${results.length} organisations`, 620),
     step("lead-scoring", "Ranking by Partnership Score", "Weighted for recurring revenue rather than single-project value", 420),
-    step("compliance", "Applying B2B contact rules", `${withContact} of ${capped.length} have a publicly listed decision-maker`, 340),
+    step(
+      "compliance",
+      "Screening against suppression registries",
+      `${withContact} of ${capped.length} have a publicly listed decision-maker · ${screeningLine(capped)}`,
+      420,
+    ),
   ];
 
   return {
@@ -667,6 +681,25 @@ function help(id: string, intent: ParsedIntent): ManagerResponse {
 }
 
 /* ------------------------------------------------------------------ */
+
+/**
+ * One-line screening summary for the agent trace. Counts leads where a
+ * registry matched and leads where a governing list was never checked — both
+ * of which stop outreach, since screening fails closed.
+ */
+function screeningLine(leads: Lead[]): string {
+  if (!leads.length) return "Nothing to screen";
+  const listed = leads.filter((l) => l.screening.blockedChannels.length > 0).length;
+  const unverified = leads.filter((l) => l.screening.unverifiedChannels.length > 0).length;
+  const parts = [
+    `${leads.length} screened against ${REGISTRIES.length} suppression lists`,
+  ];
+  if (listed) parts.push(`${listed} matched a registry and are suppressed on those channels`);
+  if (unverified)
+    parts.push(`${unverified} have at least one list not yet checked — blocked until screened`);
+  if (!listed && !unverified) parts.push("no matches");
+  return parts.join(" · ");
+}
 
 function mostCommon<T extends string>(items: T[]): T | "—" {
   if (!items.length) return "—";

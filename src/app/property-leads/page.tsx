@@ -22,6 +22,7 @@ function PropertyLeadsInner() {
     ...DEFAULT_FILTERS,
     band: params.get("score") === "hot" ? "hot" : "all",
     borough: (params.get("borough") as FilterState["borough"]) ?? "all",
+    zips: params.get("zip")?.split(",").filter(Boolean) ?? [],
   });
 
   const filtered = useMemo(() => {
@@ -31,6 +32,7 @@ function PropertyLeadsInner() {
         .join(" ").toLowerCase().includes(q)) return false;
       if (filters.borough !== "all" && p.borough !== filters.borough) return false;
       if (filters.neighborhood !== "all" && p.neighborhood !== filters.neighborhood) return false;
+      if (filters.zips.length > 0 && !filters.zips.includes(p.zip)) return false;
       if (filters.stage !== "all" && p.stage !== filters.stage) return false;
       if (!matchesBand(p.score.score, filters.band)) return false;
       if (filters.extra !== "all" && p.propertyType !== filters.extra) return false;

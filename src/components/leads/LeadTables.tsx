@@ -62,6 +62,7 @@ export function PropertyTable({ leads }: { leads: PropertyLead[] }) {
                       <span className="mt-0.5 flex items-center gap-1 text-[12px] text-subtle">
                         <MapPin className="size-3" />
                         {lead.neighborhood}, {lead.borough}
+                        <span className="font-mono">{lead.zip}</span>
                       </span>
                     </Link>
                   </td>
@@ -177,6 +178,7 @@ export function BusinessTable({ leads }: { leads: BusinessLead[] }) {
                     <span className="mt-0.5 flex items-center gap-1 text-[12px] text-subtle">
                       <MapPin className="size-3" />
                       {lead.neighborhood}, {lead.borough}
+                      <span className="font-mono">{lead.zip}</span>
                     </span>
                   </Link>
                 </td>

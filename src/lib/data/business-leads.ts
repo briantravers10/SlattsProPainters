@@ -3,6 +3,7 @@ import { NEIGHBORHOODS } from "@/lib/geo/nyc";
 import { pitchFor, scorePartnership } from "@/lib/scoring";
 import type { PartnershipScoreInput } from "@/lib/scoring";
 import { defaultBusinessPermissions } from "@/lib/compliance";
+import { screenLead } from "@/lib/compliance/screening";
 import type {
   ActivityEvent,
   Borough,
@@ -168,6 +169,7 @@ const SPECS: Spec[] = [
 
 export interface BusinessGenerationOptions {
   boroughs?: Borough[];
+  zips?: string[];
   categories?: BusinessCategory[];
   idOffset?: number;
   discoveredToday?: boolean;
@@ -201,9 +203,12 @@ export function discoverBusinessLeads(
   const rng = createRng(seed);
   const categories =
     options.categories?.length ? options.categories : (Object.keys(CATEGORY_GROUP) as BusinessCategory[]);
-  const pool = options.boroughs?.length
+  let pool = options.boroughs?.length
     ? NEIGHBORHOODS.filter((n) => options.boroughs!.includes(n.borough))
     : NEIGHBORHOODS;
+  if (options.zips?.length) {
+    pool = pool.filter((n) => n.zips.some((z) => options.zips!.includes(z)));
+  }
   const neighborhoods = pool.length ? pool : NEIGHBORHOODS;
   const offset = options.idOffset ?? 0;
 
@@ -217,6 +222,7 @@ export function discoverBusinessLeads(
       makeDiscoveredName(rng, category),
       nb,
       options.discoveredToday,
+      options.zips,
     );
   });
 }
@@ -250,6 +256,7 @@ function makeBusinessLead(
   businessName: string,
   nb: (typeof NEIGHBORHOODS)[number],
   discoveredToday = false,
+  restrictZips?: string[],
 ): BusinessLead {
   {
     {
@@ -320,6 +327,9 @@ function makeBusinessLead(
         group,
         borough: nb.borough,
         neighborhood: nb.name,
+        zip: rng.pick(
+          restrictZips?.length ? (nb.zips.filter((z) => restrictZips.includes(z)) ?? nb.zips) : nb.zips,
+        ),
         lat: nb.lat + rng.float(-0.009, 0.009),
         lng: nb.lng + rng.float(-0.011, 0.011),
         ...details,
@@ -340,6 +350,7 @@ function makeBusinessLead(
         lastContacted,
         followUpDate,
         permissions,
+        screening: screenLead(`B-${2000 + i}`, true, true),
         sourceIntegration: rng.pick([
           "Public Business Directory (demo feed)",
           "Google Business Information (demo feed)",

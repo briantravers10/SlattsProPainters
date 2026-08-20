@@ -36,6 +36,7 @@ function PartnershipLeadsInner() {
         .join(" ").toLowerCase().includes(q)) return false;
       if (filters.borough !== "all" && b.borough !== filters.borough) return false;
       if (filters.neighborhood !== "all" && b.neighborhood !== filters.neighborhood) return false;
+      if (filters.zips.length > 0 && !filters.zips.includes(b.zip)) return false;
       if (filters.stage !== "all" && b.stage !== filters.stage) return false;
       if (!matchesBand(b.score.score, filters.band)) return false;
       if (filters.extra !== "all" && b.category !== filters.extra) return false;

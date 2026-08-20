@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Ban, Check, ShieldCheck, ShieldQuestion } from "lucide-react";
+import { AlertTriangle, Ban, Check, ShieldCheck, ShieldQuestion, ListChecks, HelpCircle } from "lucide-react";
 import { Badge, Card, CardHeader, Select } from "@/components/ui";
 import type { ContactPermissions, Lead } from "@/lib/types";
 import {
@@ -11,7 +11,12 @@ import {
   evaluateChannels,
   type GateStatus,
 } from "@/lib/compliance";
-import { cn, formatDate } from "@/lib/utils";
+import {
+  REGISTRY_BY_ID,
+  SCREENING_DISCLAIMER,
+  type RegistryCheck,
+} from "@/lib/compliance/registries";
+import { cn, formatDate, relativeDate } from "@/lib/utils";
 
 const STATUS_META: Record<GateStatus, { label: string; tone: string; icon: typeof Check }> = {
   allowed: {
@@ -138,6 +143,9 @@ export function CompliancePanel({
         </div>
       )}
 
+      {/* Suppression screening */}
+      <RegistryScreening checks={lead.screening.checks} screenedAt={lead.screening.screenedAt} />
+
       {/* Channel gates */}
       <div className="border-t border-border">
         <p className="px-5 pb-2 pt-4 text-[11px] font-semibold uppercase tracking-[0.07em] text-subtle">
@@ -177,5 +185,116 @@ export function CompliancePanel({
         <p className="text-[11.5px] leading-relaxed text-subtle">{COMPLIANCE_DISCLAIMER}</p>
       </div>
     </Card>
+  );
+}
+
+
+const CHANNEL_LABEL: Record<RegistryCheck["channel"], string> = {
+  phone: "Phone",
+  sms: "SMS",
+  email: "Email",
+  door: "Door",
+};
+
+const RESULT_META = {
+  clear: {
+    label: "Clear",
+    icon: Check,
+    tone: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-500/10 dark:border-emerald-500/25",
+  },
+  listed: {
+    label: "Match",
+    icon: Ban,
+    tone: "text-rose-700 bg-rose-50 border-rose-200 dark:text-rose-300 dark:bg-rose-500/10 dark:border-rose-500/25",
+  },
+  "not-checked": {
+    label: "Not checked",
+    icon: HelpCircle,
+    tone: "text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-500/10 dark:border-amber-500/25",
+  },
+} as const;
+
+/**
+ * Per-registry screening results.
+ *
+ * "Not checked" is rendered as a warning rather than a neutral state on
+ * purpose — in this system it carries the same consequence as a match.
+ */
+function RegistryScreening({
+  checks,
+  screenedAt,
+}: {
+  checks: RegistryCheck[];
+  screenedAt: string;
+}) {
+  const matched = checks.filter((c) => c.result === "listed").length;
+  const unchecked = checks.filter((c) => c.result === "not-checked").length;
+
+  return (
+    <div className="border-t border-border">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-5 pb-2 pt-4">
+        <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-subtle">
+          <ListChecks className="size-3.5" /> Suppression screening
+        </p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {matched > 0 && <Badge tone="danger">{matched} match{matched === 1 ? "" : "es"}</Badge>}
+          {unchecked > 0 && <Badge tone="warning">{unchecked} not checked</Badge>}
+          {matched === 0 && unchecked === 0 && <Badge tone="success">All clear</Badge>}
+          <span className="text-[11.5px] text-subtle">Screened {relativeDate(screenedAt)}</span>
+        </div>
+      </div>
+
+      {unchecked > 0 && (
+        <div className="mx-5 mb-3 flex gap-2.5 rounded-xl border border-amber-300/60 bg-amber-50/70 p-3 dark:border-amber-500/25 dark:bg-amber-500/5">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <p className="text-[12.5px] leading-relaxed text-muted">
+            <strong className="font-semibold text-fg">Unscreened is treated as blocked.</strong>{" "}
+            {unchecked} governing list{unchecked === 1 ? " has" : "s have"} not been checked for this
+            lead, so the affected channels stay closed until they are. The system will not let a gap
+            in screening read as permission.
+          </p>
+        </div>
+      )}
+
+      <ul className="divide-y divide-border">
+        {checks.map((check) => {
+          const meta = RESULT_META[check.result];
+          const Icon = meta.icon;
+          const def = REGISTRY_BY_ID[check.registryId];
+          return (
+            <li key={check.registryId} className="flex flex-wrap items-start gap-3 px-5 py-2.5">
+              <span
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11.5px] font-medium",
+                  meta.tone,
+                )}
+              >
+                <Icon className="size-3" />
+                {meta.label}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium text-fg">
+                  {check.name}
+                  <span className="ml-1.5 font-normal text-subtle">· {def.authority}</span>
+                </p>
+                <p className="mt-0.5 text-[12px] leading-relaxed text-muted">{check.detail}</p>
+                {check.checkedAt && (
+                  <p className="mt-0.5 text-[11.5px] text-subtle">
+                    Checked {formatDate(check.checkedAt)}
+                  </p>
+                )}
+              </div>
+              <span className="shrink-0 rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[11px] text-muted">
+                {CHANNEL_LABEL[check.channel]}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+
+      <p className="px-5 pb-4 pt-2 text-[11.5px] leading-relaxed text-subtle">
+        {SCREENING_DISCLAIMER}
+      </p>
+    </div>
   );
 }

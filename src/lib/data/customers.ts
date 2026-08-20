@@ -77,6 +77,7 @@ export function generateCustomers(seed: number, count = 12): Customer[] {
       address: `${rng.int(20, 980)} ${nb.name} area (demo)`,
       borough: nb.borough,
       neighborhood: nb.name,
+      zip: rng.pick(nb.zips),
       lat: nb.lat + rng.float(-0.008, 0.008),
       lng: nb.lng + rng.float(-0.01, 0.01),
       jobType: rng.pick(JOB_TYPES),

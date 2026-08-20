@@ -1,4 +1,5 @@
 import { BOROUGHS, BUSINESS_CATEGORIES } from "@/lib/types";
+import { ALL_ZIPS } from "@/lib/geo/nyc";
 import type { Borough, BusinessCategory, TriggerType } from "@/lib/types";
 
 /**
@@ -27,6 +28,8 @@ export interface ParsedIntent {
   neighborhoods: string[];
   categories: BusinessCategory[];
   triggers: TriggerType[];
+  /** ZIP codes named in the command, e.g. "in 11215 and 11238". */
+  zips: string[];
   minScore?: number;
   limit: number;
   /** True when the owner named a specific number in the command. */
@@ -126,8 +129,17 @@ export function parseIntent(raw: string): ParsedIntent {
     }
   }
 
-  // Numeric limit: "find me 100 ..."
-  const numMatch = lower.match(/\b(\d{1,4})\b/);
+  // ZIP codes: any bare five-digit number in the NYC range. Parsed before the
+  // limit so "100 leads in 11215" reads the 100 as a count and the 11215 as a
+  // ZIP rather than the other way round.
+  const zips = [...new Set(text.match(/\b1\d{4}\b/g) ?? [])].filter((z) =>
+    ALL_ZIPS.includes(z),
+  );
+  if (zips.length) matched.push(...zips.map((z) => `ZIP ${z}`));
+
+  // Numeric limit: "find me 100 ..." — never a five-digit ZIP.
+  const withoutZips = zips.reduce((acc, z) => acc.replaceAll(z, " "), lower);
+  const numMatch = withoutZips.match(/\b(\d{1,4})\b/);
   const limit = numMatch ? Math.min(500, Math.max(1, parseInt(numMatch[1], 10))) : 25;
   if (numMatch) matched.push(`limit ${limit}`);
 
@@ -148,7 +160,7 @@ export function parseIntent(raw: string): ParsedIntent {
   else if (/\bthis month\b|\blast 30 days\b/i.test(text)) timeframe = "month";
   if (timeframe) matched.push(timeframe);
 
-  const kind = classify(text, { categories, triggers, timeframe });
+  const kind = classify(text, { categories, triggers, zips, timeframe });
 
   return {
     kind,
@@ -156,6 +168,7 @@ export function parseIntent(raw: string): ParsedIntent {
     neighborhoods,
     categories,
     triggers,
+    zips,
     minScore,
     limit,
     explicitLimit: Boolean(numMatch),
@@ -170,6 +183,7 @@ function classify(
   ctx: {
     categories: BusinessCategory[];
     triggers: TriggerType[];
+    zips: string[];
     timeframe?: string;
   },
 ): IntentKind {
@@ -200,7 +214,11 @@ function classify(
   ) {
     return "top-opportunities";
   }
-  if (/\bpropert|home ?owner|house|building|address|residential/i.test(text) || ctx.triggers.length > 0) {
+  if (
+    /\bpropert|home ?owner|house|building|address|residential/i.test(text) ||
+    ctx.triggers.length > 0 ||
+    ctx.zips.length > 0
+  ) {
     return "find-properties";
   }
   if (/\bpartner|b2b|business|recurring/i.test(text)) return "find-businesses";
@@ -218,6 +236,7 @@ export const EXAMPLE_COMMANDS: { text: string; hint: string }[] = [
   { text: "Which previous customers are worth reactivating?", hint: "Flywheel" },
   { text: "Break down my pipeline by borough.", hint: "Territory analysis" },
   { text: "Which leads am I not allowed to call?", hint: "Compliance" },
+  { text: "Find high-potential properties in 11215 and 11238.", hint: "ZIP targeting" },
   { text: "Find older properties in the Bronx with exterior painting opportunities.", hint: "Exterior work" },
 ];
 
